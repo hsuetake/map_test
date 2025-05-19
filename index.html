@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>現在地をOpenStreetMapに表示</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- LeafletのCSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    #map {
+      height: 400px;
+      width: 100%;
+      margin-top: 1em;
+    }
+  </style>
+</head>
+<body>
+  <h2>現在地をOpenStreetMapに表示</h2>
+  <button onclick="showMap()">現在地を取得</button>
+  <div id="map"></div>
+
+  <!-- LeafletのJS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    function showMap() {
+      if (!navigator.geolocation) {
+        alert("このブラウザは位置情報取得に対応していません。");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+
+          const map = L.map('map').setView([lat, lon], 15);
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+          }).addTo(map);
+
+          L.marker([lat, lon]).addTo(map)
+            .bindPopup("あなたの現在地")
+            .openPopup();
+        },
+        function (error) {
+          alert("位置情報の取得に失敗しました: " + error.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+  </script>
+</body>
+</html>
+
