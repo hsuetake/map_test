@@ -2,61 +2,94 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>現在地をOpenStreetMapに表示</title>
+  <title>現在地と近隣駅（Leaflet + GeoJSON）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- LeafletのCSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
   <style>
-    #map {
-      height: 400px;
-      width: 100%;
-      margin-top: 1em;
-    }
+    #map { height: 90vh; width: 100%; }
   </style>
 </head>
 <body>
-  <h2>現在地をOpenStreetMapに表示</h2>
-  <button onclick="showMap()">現在地を取得</button>
+  <h2>現在地と2km以内の駅を表示</h2>
   <div id="map"></div>
 
-  <!-- LeafletのJS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <script>
-    function showMap() {
-      if (!navigator.geolocation) {
-        alert("このブラウザは位置情報取得に対応していません。");
-        return;
-      }
+    const map = L.map('map').setView([35.6812, 139.7671], 13); // 初期：東京駅
 
-      navigator.geolocation.getCurrentPosition(
-        function (position) {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
+    // タイル表示
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-          const map = L.map('map').setView([lat, lon], 15);
+    // GeoJSONファイルを読み込んで現在地と比較
+    async function loadStationsAndShowNearby() {
+      try {
+        const res = await fetch('stations_japan.geojson');
+        const geojson = await res.json();
 
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-          }).addTo(map);
-
-          L.marker([lat, lon]).addTo(map)
-            .bindPopup("あなたの現在地")
-            .openPopup();
-        },
-        function (error) {
-          alert("位置情報の取得に失敗しました: " + error.message);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+        if (!navigator.geolocation) {
+          alert("このブラウザは位置情報に対応していません。");
+          return;
         }
-      );
+
+        navigator.geolocation.getCurrentPosition(pos => {
+          const userLat = pos.coords.latitude;
+          const userLon = pos.coords.longitude;
+
+          map.setView([userLat, userLon], 14);
+          L.marker([userLat, userLon]).addTo(map).bindPopup("あなたの現在地").openPopup();
+
+          let nearbyStations = [];
+          let minDist = Infinity;
+          let nearestStation = null;
+
+          geojson.features.forEach(feature => {
+            const { coordinates } = feature.geometry;
+            const name = feature.properties.name;
+            const dist = getDistance(userLat, userLon, coordinates[1], coordinates[0]);
+
+            if (dist <= 2) {
+              nearbyStations.push({ name, lat: coordinates[1], lon: coordinates[0], dist });
+            }
+
+            if (dist < minDist) {
+              minDist = dist;
+              nearestStation = { name, lat: coordinates[1], lon: coordinates[0], dist };
+            }
+          });
+
+          const results = nearbyStations.length > 0 ? nearbyStations : [nearestStation];
+
+          results.forEach(st => {
+            L.marker([st.lat, st.lon], { icon: L.icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", iconSize: [25, 25] }) })
+              .addTo(map)
+              .bindPopup(`${st.name}<br>距離: ${st.dist.toFixed(2)} km`);
+          });
+
+        }, err => {
+          alert("現在地の取得に失敗しました: " + err.message);
+        });
+
+      } catch (e) {
+        alert("駅データの読み込みに失敗しました");
+        console.error(e);
+      }
     }
+
+    // Haversine距離計算
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const toRad = x => x * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    loadStationsAndShowNearby();
   </script>
 </body>
 </html>
-
